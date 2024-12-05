@@ -1,0 +1,55 @@
+name: Docker firefox
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Download ngrok
+      run: |
+        wget -O ngrok.zip https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.zip
+
+    - name: Extract ngrok
+      run: |
+        unzip ngrok.zip
+        sudo mv ngrok /usr/local/bin
+        rm ngrok.zip  # Cleanup downloaded zip file
+
+    - name: Authenticate ngrok
+      run: |
+        ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Install jq (for JSON parsing)
+      run: sudo apt-get install jq
+
+    - name: Start Ngrok Tunnel
+      run: |
+        nohup ngrok http 5800 &  # Or the port Blackbird is running on
+        sleep 5  # Wait for ngrok to initialize
+
+    - name: Fetch Ngrok Public URL
+      run: |
+        echo "Fetching Ngrok Public URL..."
+        NGROK_URL=$(curl --silent --show-error http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+        echo "Ngrok URL: $NGROK_URL"
+
+    - name: Run Firefox Docker Container
+      run: |
+        docker run -d --name=firefox -p 5800:5800 -v /docker/appdata/firefox:/config:rw jlesage/firefox
+        sleep 60
+        echo "Firefox container is running"
+        sleep 3000  # Keep the container running
